@@ -19,23 +19,44 @@ function hitungUmur($tanggalLahir)
 
 $cari = trim($_GET['cari'] ?? '');
 $kamar = trim($_GET['kamar'] ?? '');
+$halaman = max(1, (int) ($_GET['halaman'] ?? 1));
+$perHalaman = 10;
+$offset = ($halaman - 1) * $perHalaman;
 
+$where = [];
+$params = [];
 if ($cari !== '') {
-    $stmt = $pdo->prepare('SELECT * FROM santri WHERE nama LIKE :cari ORDER BY id DESC');
-    $stmt->execute([':cari' => "%$cari%"]);
-} elseif ($kamar !== '') {
-    $stmt = $pdo->prepare('SELECT * FROM santri WHERE kamar = :kamar ORDER BY id DESC');
-    $stmt->execute([':kamar' => $kamar]);
-} else {
-    $stmt = $pdo->query('SELECT * FROM santri ORDER BY id DESC');
+    $where[] = 'nama LIKE :cari';
+    $params[':cari'] = "%$cari%";
 }
+if ($kamar !== '') {
+    $where[] = 'kamar = :kamar';
+    $params[':kamar'] = $kamar;
+}
+$whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+
+$stmtJumlah = $pdo->prepare('SELECT COUNT(*) FROM santri' . $whereSql);
+$stmtJumlah->execute($params);
+$totalSantri = (int) $stmtJumlah->fetchColumn();
+$totalHalaman = max(1, (int) ceil($totalSantri / $perHalaman));
+$halaman = min($halaman, $totalHalaman);
+$offset = ($halaman - 1) * $perHalaman;
+
+$sql = 'SELECT * FROM santri' . $whereSql . ' ORDER BY id DESC LIMIT :limit OFFSET :offset';
+$stmt = $pdo->prepare($sql);
+foreach ($params as $nama => $nilai) {
+    $stmt->bindValue($nama, $nilai, PDO::PARAM_STR);
+}
+$stmt->bindValue(':limit', $perHalaman, PDO::PARAM_INT);
+$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->execute();
 $daftar = $stmt->fetchAll();
 include 'header.php';
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0">Daftar Santri</h4>
-    <a href="tambah.php" class="btn btn-success">+ Tambah Santri</a>
+    <div class="d-flex gap-2"><a href="ekspor.php?<?= e(http_build_query(['cari' => $cari, 'kamar' => $kamar])) ?>" class="btn btn-outline-success">Unduh CSV</a><a href="tambah.php" class="btn btn-success">+ Tambah Santri</a></div>
 </div>
 
 <form method="get" class="row g-2 mb-3">
@@ -81,13 +102,13 @@ include 'header.php';
             <tbody>
                 <?php if (count($daftar) === 0): ?>
                     <tr>
-                        <td colspan="9" class="text-center text-muted">Belum ada data santri.</td>
+                        <td colspan="10" class="text-center text-muted">Belum ada data santri.</td>
                     </tr>
                 <?php endif; ?>
 
                 <?php foreach ($daftar as $no => $s): ?>
                     <tr>
-                        <td><?= $no + 1 ?></td>
+                        <td><?= $offset + $no + 1 ?></td>
                         <td><?= e($s['nama']) ?></td>
                         <td>
                             <?php
@@ -119,6 +140,27 @@ include 'header.php';
         </table>
     </div>
 </div>
+
+<?php if ($totalSantri > 0): ?>
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+    <small class="text-muted">Menampilkan <?= $offset + 1 ?>–<?= min($offset + count($daftar), $totalSantri) ?> dari <?= $totalSantri ?> santri</small>
+    <nav aria-label="Navigasi halaman daftar santri">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item <?= $halaman <= 1 ? 'disabled' : '' ?>">
+          <a class="page-link" href="?<?= e(http_build_query(['cari' => $cari, 'kamar' => $kamar, 'halaman' => max(1, $halaman - 1)])) ?>" aria-label="Sebelumnya">Sebelumnya</a>
+        </li>
+        <?php for ($i = 1; $i <= $totalHalaman; $i++): ?>
+          <li class="page-item <?= $i === $halaman ? 'active' : '' ?>">
+            <a class="page-link" href="?<?= e(http_build_query(['cari' => $cari, 'kamar' => $kamar, 'halaman' => $i])) ?>"><?= $i ?></a>
+          </li>
+        <?php endfor; ?>
+        <li class="page-item <?= $halaman >= $totalHalaman ? 'disabled' : '' ?>">
+          <a class="page-link" href="?<?= e(http_build_query(['cari' => $cari, 'kamar' => $kamar, 'halaman' => min($totalHalaman, $halaman + 1)])) ?>" aria-label="Berikutnya">Berikutnya</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+<?php endif; ?>
 
 <div class="modal fade" id="modalHapus" tabindex="-1">
     <div class="modal-dialog">
