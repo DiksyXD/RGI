@@ -25,7 +25,7 @@ header('Content-Type: text/csv; charset=UTF-8');
 header('Content-Disposition: attachment; filename="daftar-santri-' . date('Y-m-d') . '.csv"');
 header('Pragma: no-cache');
 $output = fopen('php://output', 'w');
-fwrite($output, "\xEF\xBB\xBF"); // BOM agar karakter Indonesia terbaca baik di Excel.
+fwrite($output, "\xEF\xBB\xBF");
 fputcsv($output, ['ID', 'Nama', 'Jenis Kelamin', 'Tanggal Lahir', 'Asal Daerah', 'Kamar', 'No. HP Wali', 'Angkatan']);
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $row['jenis_kelamin'] = $row['jenis_kelamin'] === 'L' ? 'Laki-laki' : ($row['jenis_kelamin'] === 'P' ? 'Perempuan' : '-');
